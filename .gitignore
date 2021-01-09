@@ -20,6 +20,8 @@ __pycache__/
 
 build/
 
+bin/
+
 develop-eggs/
 
 dist/
@@ -31,6 +33,10 @@ eggs/
 .eggs/
 
 lib/
+
+share/
+
+include/
 
 lib64/
 
@@ -156,7 +162,7 @@ target/
 
 .ipynb_checkpoints
 
-
+etc/jupyter/nbconfig/*
 
 # IPython
 
@@ -273,3 +279,9 @@ dmypy.json
 # Cython debug symbols
 
 cython_debug/
+
+# Caching
+.cache*
+
+# DS Store
+.DS_Store
