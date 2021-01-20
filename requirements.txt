@@ -14,3 +14,4 @@ chart_studio
 flask_sqlalchemy
 sqlalchemy
 jupyter
+pyyaml
