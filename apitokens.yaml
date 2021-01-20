@@ -1,0 +1,6 @@
+spotify_client_id: 'e6265a912d9c4be18688eee8093bb4e8'
+spotify_client_secret: 'fc27bdc4c3654450960bbb60c38b3fd0'
+spotify_access_scope: 'playlist-read-private playlist-read-collaborative playlist-modify-private user-read-private user-library-read'
+
+deezer_client_id: '446462'
+deezer_client_secret: 'fea9e6460c9d476297b1144853140c8e'
