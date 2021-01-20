@@ -1,3 +1,10 @@
+## Description
+Project using logistic regression to sort a Spotify user's song library into desired playlists.  
+Plotly-dash web application coming soon!
+
+**Spotify API Documentation:** https://developer.spotify.com/documentation/web-api/  
+**Deezer API Documentation:** https://developers.deezer.com/api  
+
 ## Motivation
 As a frequent Spotify user, I have a problem. Any time I come across a new song I like, I save it to my Library, which ends up being a mess of thousands of uncategorized songs.
 Because I never have time to organize them into playlists, I opt for other playlists available on Spotify when I'm listening to music for specific activities, like studying or working out. 
