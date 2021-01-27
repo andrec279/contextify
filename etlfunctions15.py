@@ -12,6 +12,7 @@ import itertools
 import os
 import os.path
 from os import path
+from collections import Counter
 
 from sklearn import preprocessing
 from sklearn.preprocessing import MinMaxScaler
@@ -113,6 +114,10 @@ def get_playlist_track_ids(search_string, num_entries, token) -> str:
                 track_ids.append(item['track']['id'])
         except:
             continue
+    
+    cnt = Counter(track_ids)
+    track_ids = [track_id for track_id, count in cnt.items() if count > 2]
+
     return list(set(track_ids))
 
 def get_track_artist_album(track_ids, token):
@@ -289,57 +294,64 @@ def get_audio_features(track_ids, token):
     '''
     
     sp = spotipy.Spotify(auth=token)
-    try:
-        feature_columns = [
-            'trackid',
-            'danceability', 
-            'energy', 
-            'loudness', 
-            'speechiness', 
-            'acousticness', 
-            'instrumentalness', 
-            'liveness', 
-            'valence', 
-            'tempo']
-        features_df = pd.DataFrame(columns=feature_columns)
-        num_iter = math.ceil(len(track_ids)/100)
-        i = 0
-        for i in range(num_iter):
-            start = i*100
-            end = start + 100
-            # Generate a 100-element long segment of the features_df each iteration
-            if len(track_ids[start:]) >= 100:
-                try:
-                    features_df_segment = sp.audio_features(track_ids[start:end])
-                except:
-                    continue
-            else:
-                features_df_segment = sp.audio_features(track_ids[start:])
-            
-            id_index = i*100 
-
-            for features in features_df_segment:
-                try:
-                    features_filtered = {key:features[key] for key in feature_columns if key in features}
-                    audio_features = {'trackid': track_ids[id_index]}
-                    audio_features.update(features_filtered)   
-                except:
-                    continue
+    
+    attempts = 0
+    while attempts < 3:
+        try:
+            feature_columns = [
+                'trackid',
+                'danceability', 
+                'energy', 
+                'loudness', 
+                'speechiness', 
+                'acousticness', 
+                'instrumentalness', 
+                'liveness', 
+                'valence', 
+                'tempo']
+            features_df = pd.DataFrame(columns=feature_columns)
+            num_iter = math.ceil(len(track_ids)/100)
+            i = 0
+            for i in range(num_iter):
+                start = i*100
+                end = start + 100
+                # Generate a 100-element long segment of the features_df each iteration
+                if len(track_ids[start:]) >= 100:
+                    try:
+                        features_df_segment = sp.audio_features(track_ids[start:end])
+                    except:
+                        continue
+                else:
+                    try:
+                        features_df_segment = sp.audio_features(track_ids[start:])
+                    except:
+                        continue            
                 
-                try:
-                    features_df = features_df.append(audio_features, ignore_index=True)
-                except:
-                    print(id_index)
+                id_index = i*100 
+
+                for features in features_df_segment:
+                    try:
+                        features_filtered = {key:features[key] for key in feature_columns if key in features}
+                        audio_features = {'trackid': track_ids[id_index]}
+                        audio_features.update(features_filtered)   
+                    except:
+                        continue
                     
-                id_index += 1
+                    try:
+                        features_df = features_df.append(audio_features, ignore_index=True)
+                    except:
+                        print(id_index)
+                        
+                    id_index += 1
+                i += 1        
             
-            i += 1            
-        
-        return features_df
-        
-    except:
-        print('Error occurred during audio feature extraction')
-        return None
+            return features_df
+            
+        except:
+            attempts += 1
+    
+    print('Unable to get features for playlist')
+    return False
 
 def search_and_label(pl_name, num_pl_search, token):
     '''
@@ -422,6 +434,7 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
 
     track_data = pd.concat([track_features, track_labels, track_genres], join='inner', axis=1)
     track_data.reset_index()
+    track_data.dropna()
     track_data = track_data.loc[:,~track_data.columns.duplicated()]
    
     try:
@@ -539,6 +552,8 @@ def get_data(pl_names):
     # --- END ---
     
     filtered_data = data[data['label'].isin(pl_names)]
+    filtered_data = filtered_data.reset_index()
+
     features = [
             'danceability', 
             'energy', 
@@ -699,9 +714,17 @@ def create_user_playlists(df, token, username):
         return False
     
     for index, row in generated_playlists.iterrows():       
+        print(row['name'])
         try:
-            # Add logic to pull track id's from existing playlist, then compare with the list of tracks_to_add and trim tracks_to_add accordingly
-            tracks_to_add = df[df['playlist']==row['name']]['trackid'].to_list()
+            playlist_items = sp.playlist_items(playlist_id=row['id'])['items']
+            playlist_tracks = [item['track']['id'] for item in playlist_items]
+            all_tracks = df[df['playlist']==row['name']]['trackid'].to_list()
+            tracks_to_add = [track for track in all_tracks if track not in playlist_tracks]
+            
+            if len(tracks_to_add) == 0:
+                print('Playlist is already up to date')
+                continue
+            
             num_posts = math.ceil(len(tracks_to_add) / 100)
 
             for i in range(num_posts):
