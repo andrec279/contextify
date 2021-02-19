@@ -34,7 +34,8 @@ evaluate LogReg performance if assignment of track to playlist p is made for pro
 with more incorrect entries). So, I am weighting precision's importance over recall.
 4. Tune LogReg model hyperparameters using GridSearchCV and validate on testing dataset.
 
-**4 - Web Application (TODO)**
+**4 - Web Application**
 1. Wrap workflow in Plotly-dash module.
 2. Pass in my Spotify authentication credentials and store my song feature data.
 3. Run trained LogReg model on my song feature data and create new playlists in Spotify via Spotify API.
+4. Deploy application to cloud instance (AWS / GCP / Azure)
