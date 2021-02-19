@@ -27,6 +27,7 @@ from sklearn.svm import SVC
 from sklearn import preprocessing
 
 def get_user_track_ids(token):
+    
     '''
     Parameters:
         - token: client token to connect to Spotify API
@@ -69,7 +70,7 @@ def get_playlist_track_ids(search_string, num_entries, token) -> str:
     effectively getting num_entries opinions from the Spotify user base on which songs belong in which
     types of playlist. Higher num_entries = more robust results
     
-    Return: unique track ids from all playlists (list format)
+    Return: dict containing unique track ids from all playlists (list format) and number of playlists returned
     '''
 
     # Spotify API can only query up to 50 entries at a time, so to get > 50 entries,
@@ -100,8 +101,7 @@ def get_playlist_track_ids(search_string, num_entries, token) -> str:
             for playlist in json['playlists']['items']:
                 playlist_ids.append(playlist['id'])
         except:
-            print('Playlist search failure')
-            return None
+            continue
     
     # Run a new Spotify API query for each playlist ID to get list of song ID's in that playlist
     track_ids = []
@@ -116,9 +116,12 @@ def get_playlist_track_ids(search_string, num_entries, token) -> str:
             continue
     
     cnt = Counter(track_ids)
-    track_ids = [track_id for track_id, count in cnt.items() if count > 2]
+    track_ids = [track_id for track_id, count in cnt.items() if count > 10]
 
-    return list(set(track_ids))
+    if len(track_ids) == 0:
+        print('No suitable track ids found. This one will not work.')
+
+    return {'track_ids': list(set(track_ids)), 'num_pls': len(playlist_ids)}
 
 def get_track_artist_album(track_ids, token):
     '''
@@ -175,7 +178,7 @@ def get_track_artist_album(track_ids, token):
                                    'track': track['name']})
                 index += 1
         except:
-            print('AAN search failure')
+            print('track artist album search failure')
             continue
 
     return tracks_aan
@@ -378,7 +381,8 @@ def search_and_label(pl_name, num_pl_search, token):
     
     song_labels = pd.DataFrame(columns=['trackid', 'label'])
 
-    queried_track_ids = get_playlist_track_ids(pl_name, num_pl_search, token)
+    queried_track_ids = get_playlist_track_ids(pl_name, num_pl_search, token)['track_ids']
+    num_pls = get_playlist_track_ids(pl_name, num_pl_search, token)['num_pls']
     
     for track_id in queried_track_ids:
         try:
@@ -387,7 +391,7 @@ def search_and_label(pl_name, num_pl_search, token):
         except:
             continue
 
-    return song_labels
+    return {'track_labels': song_labels, 'num_pls': num_pls}
 
 def store_data(pl_name, num_pl_search, token, deezer_client_secret):
     '''
@@ -427,7 +431,8 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
     
     # ----- END ---------------------
     print('Starting data store for new label: {0}'.format(pl_name))
-    track_labels = search_and_label(pl_name, num_pl_search, token)
+    track_labels = search_and_label(pl_name, num_pl_search, token)['track_labels']
+    num_pls = search_and_label(pl_name, num_pl_search, token)['num_pls']
     track_ids = track_labels['trackid'].to_list()
     track_features = get_audio_features(track_ids, token)
     track_genres = get_genres(track_ids, token, deezer_client_secret)
@@ -448,8 +453,8 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
         # ----- END ---------------------
         
         t1 = time.time()
-        print('Success: {0} unique tracks with features and labels obtained in {1} seconds'.format( \
-              len(track_data.trackid.unique()), (t1-t0)))
+        print('Success: {0} unique tracks with features and labels obtained from {1} playlists in {2} seconds'.format( \
+              len(track_data.trackid.unique()), num_pls, (t1-t0)))
 
         return True
     
@@ -457,7 +462,7 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
         print ('Error: CSV write failure')
         return False
 
-def store_user_track_data(token, deezer_client_secret):
+def store_user_track_data(username, token, deezer_client_secret):
     '''
     Parameters:
         - token: client token needed to connect to Spotify API
@@ -478,14 +483,13 @@ def store_user_track_data(token, deezer_client_secret):
     --------+--------+--------+--------+--------+-------------
     1e3ae1j |   0.4  |    2   |   1.4  |  0.23  | alternative
     '''
-    t0 = time.time()
 
     user_track_ids = get_user_track_ids(token)
     
     # ----- REPLACE WITH SQL SELECT UNIQUE label FROM [tableName] LOGIC HERE -----
     
-    if path.exists('user_trackdata.csv'):
-        existing_data = pd.read_csv('user_trackdata.csv')
+    if path.exists(username + '_trackdata.csv'):
+        existing_data = pd.read_csv(username + '_trackdata.csv')
         stored_tracks = list(set(existing_data['trackid'].to_list()))
         track_ids = [track for track in user_track_ids if track not in stored_tracks]
     else:
@@ -510,16 +514,12 @@ def store_user_track_data(token, deezer_client_secret):
     try:
         # ----- REPLACE WITH SQL INSERT INTO [tableName] LOGIC HERE -----
         
-        if path.exists('user_trackdata.csv'):
-            track_data.to_csv('user_trackdata.csv', mode='a', header=False, index=False)
+        if path.exists(username + '_trackdata.csv'):
+            track_data.to_csv(username + '_trackdata.csv', mode='a', header=False, index=False)
         else:
-            track_data.to_csv('user_trackdata.csv', mode='w', header=True, index=False)
+            track_data.to_csv(username + '_trackdata.csv', mode='w', header=True, index=False)
 
         # ----- END ---------------------
-        
-        t1 = time.time()
-        print('Success: {0} unique tracks with features stored from user library in {1} seconds'.format( \
-              len(track_data.trackid.unique()), (t1-t0)))
 
         return True
     
@@ -551,8 +551,13 @@ def get_data(pl_names):
 
     # --- END ---
     
-    filtered_data = data[data['label'].isin(pl_names)]
+    filtered_data = data
+
+    if pl_names != 'all':
+        filtered_data = data[data['label'].isin(pl_names)]
+    
     filtered_data = filtered_data.reset_index()
+    playlists = list(set(filtered_data['label'].to_list()))
 
     features = [
             'danceability', 
@@ -569,12 +574,12 @@ def get_data(pl_names):
 
     print('{0} records obtained in {1} seconds'.format(len(filtered_data.index), t1-t0))
 
-    return {'data': filtered_data, 'features': features, 'playlists': pl_names}
+    return {'data': filtered_data, 'features': features, 'playlists': playlists}
 
-def get_user_track_data():
+def get_user_track_data(username):
     '''
     Parameters:
-        - None
+        - Username: to locate the right .csv file
 
     Function: Get user track data from data store and load output into Pandas dataframe.
     
@@ -587,12 +592,10 @@ def get_user_track_data():
     --------+--------+--------+--------+--------+--------
     1e3ae1j |   0.4  |    2   |   1.4  |  0.23  |  rock  
     '''
-    
-    t0 = time.time()
-    
+       
     # --- REPLACE WITH SELECT * FROM [tableName] HERE ---
     
-    data = pd.read_csv('user_trackdata.csv')
+    data = pd.read_csv(username + '_trackdata.csv')
 
     # --- END ---
     
@@ -606,10 +609,6 @@ def get_user_track_data():
             'liveness', 
             'valence', 
             'tempo']
-
-    t1 = time.time()
-
-    print('{0} records obtained in {1} seconds'.format(len(data.index), t1-t0))
 
     return {'data': data, 'features': features}
 
@@ -696,7 +695,7 @@ def create_user_playlists(df, token, username):
         playlists = list(set(df['playlist'].to_list()))
         playlists_to_add = [pl for pl in playlists if pl not in existing_pl_names]
     except:
-        print('Error: Failed to retrieve user playlists')
+        print('Error: Failed to retrieve existing user playlists')
         return False
     
     for playlist in playlists_to_add:
@@ -714,7 +713,6 @@ def create_user_playlists(df, token, username):
         return False
     
     for index, row in generated_playlists.iterrows():       
-        print(row['name'])
         try:
             playlist_items = sp.playlist_items(playlist_id=row['id'])['items']
             playlist_tracks = [item['track']['id'] for item in playlist_items]

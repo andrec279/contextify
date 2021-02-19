@@ -8,6 +8,7 @@ sklearn
 imblearn
 flask
 dash
+dash_bootstrap_components
 dash_core_components
 dash_html_components
 chart_studio

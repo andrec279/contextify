@@ -1,4 +1,0 @@
-cloud_sql_connection_name: 'contextify-1:us-east4:contextify-1'
-db_user: 'root'
-db_pass: 'z02kLHf0hIpL9aks'
-db_name: 'trackdata'
