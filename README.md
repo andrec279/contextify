@@ -1,6 +1,6 @@
 ## Description
 Project using logistic regression to sort a Spotify user's song library into desired playlists.  
-Plotly-dash web application coming soon!
+Plotly-dash web application coming soon! Code located in dash_application folder will be deployed to cloud instance.
 
 **Spotify API Documentation:** https://developer.spotify.com/documentation/web-api/  
 **Deezer API Documentation:** https://developers.deezer.com/api  
