@@ -29,6 +29,7 @@ from sklearn import preprocessing
 from sklearn.decomposition import PCA
 
 import dash
+import dash_table
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -36,23 +37,31 @@ import plotly.express as px
 import plotly.graph_objects as go
 from dash.dependencies import Input, Output, State
 
+colors = {
+    'background': '#f7f7f9'
+}
+
 def generate_table(dataframe, max_rows=10):
-    return html.Table([
-        html.Thead(
-            html.Tr([html.Th(col) for col in dataframe.columns])
-        ),
-        html.Tbody([
-            html.Tr([
-                html.Td(dataframe.iloc[i][col]) for col in dataframe.columns
-            ]) for i in range(min(len(dataframe), max_rows))
-        ])
-    ])
+    return dash_table.DataTable(        
+        columns=[{'name': i, 'id': i} for i in dataframe.columns],
+        data=dataframe.to_dict('records')
+    )
 
 def generate_sizes_graph(dataframe):
     class_sizes = dataframe.groupby('label', as_index=False)\
                       .agg(count=pd.NamedAgg(column='label', aggfunc='count'))
         
-    sizes_plot = px.bar(class_sizes, x='label', y='count')
+    sizes_plot = go.Figure(
+                           data = go.Bar(
+                               x=class_sizes['label'],
+                               y=class_sizes['count'],
+                               width=0.5
+                           ),
+                           layout=go.Layout(
+                               paper_bgcolor=colors['background']
+                           )
+                        )
+    
     return sizes_plot
 
 def generate_top_genres(viz_data, playlists):
@@ -78,6 +87,10 @@ def generate_pca_2d_plot(viz_data, std_features):
     pca_data.columns = ['PC1', 'PC2', 'label']
 
     pca_graph = px.scatter(pca_data, x='PC1', y='PC2', color='label')
+
+    pca_graph.update_layout(
+        paper_bgcolor=colors['background']
+    )
 
     return pca_graph
 
@@ -107,7 +120,8 @@ def generate_averages_plot(viz_data, std_features, features):
             visible=True,
             range=[min(mins)-0.2, max(maxs)+0.2]
             )),
-        showlegend=True
+        showlegend=True,
+        paper_bgcolor=colors['background']
     )
 
     return averages_graph

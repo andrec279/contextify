@@ -29,6 +29,7 @@ from sklearn import preprocessing
 from sklearn.decomposition import PCA
 
 import dash
+import dash_table
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -58,12 +59,18 @@ deezer_client_secret = tokenvars['deezer_client_secret']
 
 
 '''===== Initialize App ====='''
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+external_stylesheets = ['https://stackpath.bootstrapcdn.com/bootswatch/4.5.2/lux/bootstrap.min.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 '''===== Initialize App ====='''
 
 
 '''===== Load Global Variables ====='''
+colors = {
+    'background': '#f7f7f9',
+    'graph-header-background': '#000000',
+    'header-text': '#ffffff'
+}
+
 training_data = get_data('all')
 data = training_data['data'].drop('trackid', axis=1)
 data_wtrackid = training_data['data']
@@ -78,15 +85,24 @@ stdscaler = StandardScaler()
 '''===== Load Global Variables ====='''
 
 app.layout = html.Div(children=[
-    html.H1(
-        children='Welcome to Contextify',
-        style={'textAlign': 'center'}
-    ),
-
-    html.Div(
-        children='Rediscover your own music in different contexts. Auto-build Spotify playlists \
-                  in just a few clicks.',
-        style={'textAlign': 'center'}
+    
+    dbc.Jumbotron(
+        [
+            dbc.Container(
+                [
+                    html.H1("Contextify", className="display-3", style={'textAlign': 'center'}),
+                    html.Hr(className="my-2"),
+                    html.P(
+                        'Rediscover your own music in different contexts. Auto-build Spotify playlists \
+                        in just a few clicks.',
+                        className="lead",
+                        style={'textAlign': 'center'}
+                    )
+                ],
+                fluid=True,
+            )
+        ],
+        fluid=True,
     ),
 
     html.Br(),
@@ -109,23 +125,32 @@ app.layout = html.Div(children=[
 
     html.Div(
         [
-            dcc.Dropdown(
-                id='playlist_select_dropdown',
-                options=playlist_options,
-                placeholder='Choose playlists to create',
-                multi=True,
-                style={'width': '200'}
+            html.Div(
+                html.Div(
+                    dcc.Dropdown(
+                        id='playlist_select_dropdown',
+                        options=playlist_options,
+                        placeholder='Choose playlists to create',
+                        multi=True,
+                        style={'minWidth': '300px'}
+                    ),
+                ),
+                style={'width':'100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center'}
             ),
-            html.Button(id='playlist_select_submit', children='Begin'),
+            html.Br(),
+            html.Div(
+                dbc.Button(id='playlist_select_submit', color='primary', className="mr-1", children='Begin'),
+                style={'width':'100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center'}
+            )
         ],
-        style={'width':'100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center'}
     ),
 
+    html.Br(), 
     html.Br(),
 
     html.Div(
         html.H3(
-            children='''What we've learned about these playlists''',
+            children='''What we've learned about these playlists:''',
             style={'textAlign': 'center'}
         ),
         id='model_data_dashboard_header',
@@ -139,59 +164,78 @@ app.layout = html.Div(children=[
     ),
 
     html.Div(
-        html.Div(
-            [           
-                html.Div(
-                    [
-                        html.H4('Playlist Feature Averages', style={'textAlign': 'center'}),
-                        dcc.Graph(id='averages_graph')
-                    ],
-                    id='averages_graph_container',
-                    className='six columns',
-                    style={'display': 'none'}
-                ),
-                
-                html.Div(
-                    [
-                        html.H4('2D (PCA) Playlist Feature Distributions', style={'textAlign': 'center'}),
-                        dcc.Graph(id='pca_graph')
-                    ],
-                    id='pca_graph_container',
-                    className='six columns',
-                    style={'display': 'none'}
-                )    
-            ],
-            className='row',
-            style={'width':'100%', 'display': 'block', 'align-items': 'center', 'justify-content': 'center'}
-        ),
+        [           
+            html.Div(
+                [
+                    html.H4('Playlist Feature Averages', style={'textAlign': 'center', 
+                                                                'backgroundColor': colors['graph-header-background'],
+                                                                'color': colors['header-text'],
+                                                                'paddingTop': '10px',
+                                                                'paddingBottom': '10px'}),
+                    dcc.Graph(id='averages_graph')
+                ],
+                id='averages_graph_container',
+                className='col-auto',
+                style={'display': 'none'}
+            ),
+            
+            html.Div(
+                [
+                    html.H4('2D (PCA) Playlist Feature Distributions', style={'textAlign': 'center', 
+                                                                                'backgroundColor': colors['graph-header-background'],
+                                                                                'color': colors['header-text'],
+                                                                                'paddingTop': '10px',
+                                                                                'paddingBottom': '10px'}),
+                    dcc.Graph(id='pca_graph')
+                ],
+                id='pca_graph_container',
+                className='col-auto',
+                style={'display': 'none'}
+            )    
+        ],
+        className='row justify-content-center', 
+        style={'marginLeft': 'auto', 'marginRight': 'auto'}
     ),
 
+    html.Br(),
+
     html.Div(
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.H4('Top 3 Playlist Genres', style={'textAlign': 'center'}),
-                        html.Div(id='top_genres')
-                    ], 
-                    id='top_genres_container',
-                    className='six columns',
-                    style={'display': 'none', 'width':'100%', 'align-items': 'center', 'justify-content': 'center'}
-                ),
-                
-                html.Div(
-                    [
-                        html.H4('Training Data Sample Sizes', style={'textAlign': 'center'}),
-                        dcc.Graph(id='sizes_graph')
-                    ], 
-                    id='sizes_graph_container',
-                    className='six columns',
-                    style={'display': 'none'}
-                )
-            ], 
-            className='row',
-            style={'width':'100%', 'display': 'block', 'align-items': 'center', 'justify-content': 'center'}
-        ),
+        [
+            html.Div(
+                [
+                    html.H4('Top 3 Playlist Genres', style={'textAlign': 'center', 
+                                                            'backgroundColor': colors['graph-header-background'],
+                                                            'color': colors['header-text'],
+                                                            'paddingTop': '10px',
+                                                            'paddingBottom': '10px',
+                                                            'paddingLeft': 'auto',
+                                                            'paddingRight': 'auto'}),
+                    html.Div(
+                        html.Div(id='top_genres'),
+                        style={'marginTop': '10px', 'marginBottom': '10px', 'backgroundColor': colors['background']}
+                    )
+                ], 
+                id='top_genres_container',
+                className='col-auto',
+                style={'display': 'none'}
+            ),
+            
+            html.Div(
+                [
+                    html.H4('Training Data Sample Sizes', style={'textAlign': 'center', 
+                                                                    'backgroundColor': colors['graph-header-background'],
+                                                                    'color': colors['header-text'],
+                                                                    'paddingTop': '10px',
+                                                                    'paddingBottom': '10px'}),
+                    dcc.Graph(id='sizes_graph')
+                ], 
+                id='sizes_graph_container',
+                className='col-auto',
+                style={'display': 'none'}
+            )
+        ], 
+        className='row justify-content-center', 
+        style={'marginLeft': 'auto', 'marginRight': 'auto'}
     ),
 
     html.Br(),
@@ -203,8 +247,10 @@ app.layout = html.Div(children=[
                 html.Div('''We'll retrieve your 'Liked' songs and categorize them into the 
                     playlists selected'''),
                 html.Br(),
-                dcc.Input(id='spotify_username_input', type='text', placeholder='Spotify Username'),
-                html.Button(id='spotify_username_submit', children='Load Data'),
+                dbc.Input(id='spotify_username_input', type='text', placeholder='Spotify Username'),
+                html.Br(),
+                html.Br(),
+                dbc.Button(id='spotify_username_submit', color='primary', className="mr-1", children='Load Data'),
                 dcc.Loading(
                     id="user_loading",
                     type="default",
@@ -221,13 +267,16 @@ app.layout = html.Div(children=[
 
     html.Div(
         [
-            html.Button(id='run_model_button', children='Create Playlists'),
+            dbc.Button(id='run_model_button', color='primary', className="mr-1", children='Create Playlists'),
             html.Br(),
             html.Br()
         ],
         style={'display': 'none'},
         id='run_model_button_container'
     ),
+
+    html.Br(),
+    html.Br(),
 
     html.Div(
         html.H3(
@@ -281,57 +330,80 @@ app.layout = html.Div(children=[
         [           
             html.Div(
                 [
-                    html.H4('Your Playlist Feature Averages', style={'textAlign': 'center'}),
+                    html.H4('Your Playlist Feature Averages', style={'textAlign': 'center', 
+                                                                    'backgroundColor': colors['graph-header-background'],
+                                                                    'color': colors['header-text'],
+                                                                    'paddingTop': '10px',
+                                                                    'paddingBottom': '10px'}),
                     dcc.Graph(id='averages_graph_user')
                 ],
                 id='averages_graph_user_container',
-                className='six columns',
+                className='col-auto',
                 style={'display': 'none'}
             ),
             
             html.Div(
                 [
-                    html.H4('Your 2D (PCA) Playlist Feature Distributions', style={'textAlign': 'center'}),
+                    html.H4('Your 2D (PCA) Playlist Feature Distributions', style={'textAlign': 'center', 
+                                                                            'backgroundColor': colors['graph-header-background'],
+                                                                            'color': colors['header-text'],
+                                                                            'paddingTop': '10px',
+                                                                            'paddingBottom': '10px'}),
                     dcc.Graph(id='pca_graph_user')
                 ],
                 id='pca_graph_user_container',
-                className='six columns',
+                className='col-auto',
                 style={'display': 'none'}
             )    
         ],
-        className='row'
-    ),
+        className='row justify-content-center', 
+        style={'marginLeft': 'auto', 'marginRight': 'auto'}
+    ), 
 
     html.Div(
         [
             html.Div(
                 [
-                    html.H4('Your Top 3 Playlist Genres', style={'textAlign': 'center'}),
-                    html.Div(id='top_genres_user')
+                    html.H4('Your Top 3 Playlist Genres', style={'textAlign': 'center', 
+                                                                'backgroundColor': colors['graph-header-background'],
+                                                                'color': colors['header-text'],
+                                                                'paddingTop': '10px',
+                                                                'paddingBottom': '10px'}),
+                    html.Div(
+                        html.Div(id='top_genres_user'),
+                        style={'marginTop': '10px', 'marginBottom': '10px', 'backgroundColor': colors['background']}
+                    )
                 ], 
                 id='top_genres_user_container',
-                className='six columns',
+                className='col-auto',
                 style={'display': 'none'}
             ),
             
             html.Div(
                 [
-                    html.H4('Your Playlist Sizes', style={'textAlign': 'center'}),
+                    html.H4('Your Playlist Sizes', style={'textAlign': 'center', 
+                                                        'backgroundColor': colors['graph-header-background'],
+                                                        'color': colors['header-text'],
+                                                        'paddingTop': '10px',
+                                                        'paddingBottom': '10px'}),
                     dcc.Graph(id='sizes_graph_user')
                 ],
                 id='sizes_graph_user_container',
-                className='six columns',
+                className='col-auto',
                 style={'display': 'none'}
             )
         ], 
-        className='row'
+        className='row justify-content-center', 
+        style={'marginLeft': 'auto', 'marginRight': 'auto'}
     ),
 
     html.Div(
         html.Div(
             [
                 html.Br(),
-                html.Button(id='save_button', children='Save to Spotify'),
+                dbc.Button(id='save_button', color='primary', className="mr-1", children='Save to Spotify'),
+                html.Br(),
+                html.Br(),
                 html.Br(),
                 dcc.Loading(
                     id='save_loading',
@@ -515,7 +587,8 @@ def prep_training_data(n_clicks, playlists):
 def show_sizes_graph_training(n_clicks, viz_data_json, playlists):
     if n_clicks:
         viz_data = pd.read_json(viz_data_json)        
-        return generate_sizes_graph(viz_data), {'display': 'block'}, {'display': 'block'}
+        return generate_sizes_graph(viz_data), {'display': 'block', 'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'},\
+        {'width':'100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center'}
     else:
         return {'data': []}, {'display': 'none'}, {'display': 'none'}
 
@@ -527,7 +600,7 @@ def show_sizes_graph_training(n_clicks, viz_data_json, playlists):
 def show_top_genres(n_clicks, viz_data_json, playlists):
     if n_clicks:
         viz_data = pd.read_json(viz_data_json)
-        return generate_table(generate_top_genres(viz_data, playlists)), {'display': 'block'}
+        return generate_table(generate_top_genres(viz_data, playlists)), {'display': 'block',  'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'}
     else:
         return {}, {'display': 'none'}
 
@@ -548,7 +621,8 @@ def show_pca_graph_and_avg_graph_training(n_clicks, playlists, viz_data_json, st
         averages_graph = generate_averages_plot(viz_data, std_features, features)
         pca_graph = generate_pca_2d_plot(viz_data, std_features)
 
-        return pca_graph, {'display': 'block'}, {}, averages_graph, {'display': 'block'}
+        return pca_graph, {'display': 'block',  'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'},\
+        {}, averages_graph, {'display': 'block',  'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'}
     else:
         return {}, {'display': 'none'}, {}, {}, {'display': 'none'}
 
@@ -569,7 +643,8 @@ def show_pca_graph_and_avg_graph_user(n_clicks, playlists, user_viz_data_json, u
         averages_graph = generate_averages_plot(user_viz_data, user_std_features, features)
         pca_graph = generate_pca_2d_plot(user_viz_data, user_std_features)
 
-        return pca_graph, {'display': 'block'}, averages_graph, {'display': 'block'}, {'display': 'block'}
+        return pca_graph, {'display': 'block', 'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'},\
+        averages_graph, {'display': 'block', 'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'}, {'display': 'block'}
     else:
         return {}, {'display': 'none'}, {}, {'display': 'none'}, {'display': 'none'}
 
@@ -580,7 +655,7 @@ def show_pca_graph_and_avg_graph_user(n_clicks, playlists, user_viz_data_json, u
 def show_sizes_graph_user(n_clicks, user_viz_data_json):
     if n_clicks:
         user_viz_data = pd.read_json(user_viz_data_json)        
-        return generate_sizes_graph(user_viz_data), {'display': 'block'}
+        return generate_sizes_graph(user_viz_data), {'display': 'block', 'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'}
     else:
         return {'data': []}, {'display': 'none'}
 
@@ -592,7 +667,8 @@ def show_sizes_graph_user(n_clicks, user_viz_data_json):
 def show_top_genres_user(n_clicks, user_viz_data_json, playlists):
     if n_clicks:
         user_viz_data = pd.read_json(user_viz_data_json)
-        return generate_table(generate_top_genres(user_viz_data, playlists)), {'display': 'block'}
+        return generate_table(generate_top_genres(user_viz_data, playlists)),\
+        {'display': 'block', 'marginLeft': '10px', 'marginRight': '10px', 'marginBottom': '10px'}
     else:
         return {}, {'display': 'none'}
 

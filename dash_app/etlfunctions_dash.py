@@ -692,8 +692,14 @@ def create_user_playlists(df, token, username):
     
     try:
         existing_pl_names = get_user_playlists(token)['name'].to_list()
-        playlists = list(set(df['playlist'].to_list()))
+        
+        playlists_raw = list(set(df['playlist'].to_list()))
+        playlists = []
+        for pl in playlists_raw:
+            playlists.append('contextify_' + pl)
+
         playlists_to_add = [pl for pl in playlists if pl not in existing_pl_names]
+
     except:
         print('Error: Failed to retrieve existing user playlists')
         return False
@@ -708,22 +714,31 @@ def create_user_playlists(df, token, username):
     try:
         user_playlists = get_user_playlists(token)
         generated_playlists = user_playlists[user_playlists['name'].isin(playlists)]
+        print(generated_playlists)
     except:
         print('Error: Failed to retrieve newly added playlists')
         return False
     
     for index, row in generated_playlists.iterrows():       
         try:
-            playlist_items = sp.playlist_items(playlist_id=row['id'])['items']
-            playlist_tracks = [item['track']['id'] for item in playlist_items]
-            all_tracks = df[df['playlist']==row['name']]['trackid'].to_list()
-            tracks_to_add = [track for track in all_tracks if track not in playlist_tracks]
+            num_tracks = sp.playlist_items(playlist_id=row['id'])['total']
+            playlist_tracks = []
+
+            if num_tracks > 0:
+                for ind in range(math.ceil(num_tracks / 100)):
+                    start = ind*100
+                    track_items = sp.playlist_items(playlist_id=row['id'], offset=start)['items']
+                    for item in track_items:
+                        playlist_tracks.append(item['track']['id']) # Get track id of each track in playlist_items
+
+            all_tracks = df['contextify_'+df['playlist']==row['name']]['trackid'].to_list() # Get track ids of all songs from input df whose playlist name + 'contextify_' prefix = contextify generated playlist name          
+            tracks_to_add = [track for track in all_tracks if track not in playlist_tracks] # Get list of tracks from all_tracks that are not in playlist_tracks
             
             if len(tracks_to_add) == 0:
                 print('Playlist is already up to date')
                 continue
             
-            num_posts = math.ceil(len(tracks_to_add) / 100)
+            num_posts = math.ceil(len(tracks_to_add) / 100) # Calculates number of API calls needed to add tracks
 
             for i in range(num_posts):
                 start = i*100
