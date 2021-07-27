@@ -50,7 +50,6 @@ tokenvars = yaml.load(open('apitokens.yaml'))
 client_id = tokenvars['spotify_client_id']
 client_secret = tokenvars['spotify_client_secret']
 scope = tokenvars['spotify_access_scope']
-redirect_uri = 'http://localhost:7777/callback'
 
 # Credentials for Deezer API (using my Deezer Developer account)
 deezer_client_id = tokenvars['deezer_client_id']
@@ -61,6 +60,8 @@ deezer_client_secret = tokenvars['deezer_client_secret']
 '''===== Initialize App ====='''
 external_stylesheets = ['https://stackpath.bootstrapcdn.com/bootswatch/4.5.2/lux/bootstrap.min.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+application = app.server
+app.title = 'Contextify'
 '''===== Initialize App ====='''
 
 
@@ -450,7 +451,7 @@ def prep_user_data(n_clicks, username):
                                         scope=scope, 
                                         client_id=client_id,
                                         client_secret=client_secret,
-                                        redirect_uri='http://localhost:7777/callback'
+                                        redirect_uri='http://example.com:8080/callback'
                 )
         
         t0 = time.time()
@@ -683,7 +684,7 @@ def save_playlists_user(n_clicks, username, user_data_json):
                                         scope=scope, 
                                         client_id=client_id,
                                         client_secret=client_secret,
-                                        redirect_uri='http://localhost:7777/callback'
+                                        redirect_uri='http://example.com:8080/callback'
                 )
         
         user_data = pd.read_json(user_data_json)
@@ -698,4 +699,5 @@ def save_playlists_user(n_clicks, username, user_data_json):
         return {}
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    application.run(debug=True, port=int(os.environ.get("PORT",
+                                                   os.environ.get("SPOTIPY_REDIRECT_URI", 8080).split(":")[-1])))
