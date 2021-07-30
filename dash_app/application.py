@@ -1,4 +1,5 @@
 import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 import spotipy.util as util
 import requests
 import pandas as pd
@@ -50,6 +51,7 @@ tokenvars = yaml.load(open('apitokens.yaml'))
 client_id = tokenvars['spotify_client_id']
 client_secret = tokenvars['spotify_client_secret']
 scope = tokenvars['spotify_access_scope']
+spotipy_redirect_uri = 'https://example.com:8080'
 
 # Credentials for Deezer API (using my Deezer Developer account)
 deezer_client_id = tokenvars['deezer_client_id']
@@ -446,16 +448,16 @@ def prep_user_data(n_clicks, username):
     '''Get Spotify username and download their track library data.
     Binarize cat. variables and write results as json to 'user_data' hidden div.'''
     if n_clicks:
-        token = util.prompt_for_user_token(
-                                        username=username, 
-                                        scope=scope, 
-                                        client_id=client_id,
-                                        client_secret=client_secret,
-                                        redirect_uri='http://example.com:8080/callback'
-                )
+        sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+                                                       client_id=client_id,
+                                                       client_secret=client_secret,
+                                                       redirect_uri='https://example.com:8080',
+                                                       scope=scope,
+                                                       username=username
+                                                       ))
         
         t0 = time.time()
-        store_user_track_data(username, token, deezer_client_secret)
+        store_user_track_data(sp, username, deezer_client_secret)
         user_tracks_df = get_user_track_data(username)['data']
 
         binarizer_user = binarize(df=user_tracks_df, feature_var='genre', label_var='None', id_col='trackid')
@@ -679,19 +681,19 @@ def show_top_genres_user(n_clicks, user_viz_data_json, playlists):
               State('user_data_predicted', 'children'))
 def save_playlists_user(n_clicks, username, user_data_json):
     if n_clicks:
-        token = util.prompt_for_user_token(
-                                        username=username, 
-                                        scope=scope, 
-                                        client_id=client_id,
-                                        client_secret=client_secret,
-                                        redirect_uri='http://example.com:8080/callback'
-                )
+        sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+                                                       client_id=client_id,
+                                                       client_secret=client_secret,
+                                                       redirect_uri='https://example.com:8080',
+                                                       scope=scope,
+                                                       username=username
+                                                       ))
         
         user_data = pd.read_json(user_data_json)
         user_data = user_data[['trackid', 'label']]
         user_data.columns = ['trackid', 'playlist']
 
-        create_user_playlists(user_data, token, username)
+        create_user_playlists(user_data, sp, username)
 
         return {}
     
@@ -699,5 +701,4 @@ def save_playlists_user(n_clicks, username, user_data_json):
         return {}
 
 if __name__ == '__main__':
-    application.run(debug=True, port=int(os.environ.get("PORT",
-                                                   os.environ.get("SPOTIPY_REDIRECT_URI", 8080).split(":")[-1])))
+    application.run(debug=True, port=8080)

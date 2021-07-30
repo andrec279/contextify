@@ -26,7 +26,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn import preprocessing
 
-def get_user_track_ids(token):
+def get_user_track_ids(sp):
     
     '''
     Parameters:
@@ -37,11 +37,11 @@ def get_user_track_ids(token):
     
     Return: user_track_ids: unique track ids from user's Spotify library
     '''    
-    if token:
-        sp = spotipy.Spotify(auth=token)
-    else:
-        print('Error in retrieving user track IDs: No token available')
-        return False
+ #   if token:
+ #       sp = spotipy.Spotify(auth=token)
+ #   else:
+ #       print('Error in retrieving user track IDs: No token available')
+ #       return False
 
     limit = 50
     total_tracks = sp.current_user_saved_tracks(limit=1)['total']
@@ -123,24 +123,18 @@ def get_playlist_track_ids(search_string, num_entries, token) -> str:
 
     return {'track_ids': list(set(track_ids)), 'num_pls': len(playlist_ids)}
 
-def get_track_artist_album(track_ids, token):
+def get_track_artist_album(track_ids, sp):
     '''
     Parameters:
         - track_ids: list of Spotify track ids obtained from get_playlist_track_ids
-        - token: client token to connect to Spotify API
+        - sp: spotipy class instance for making Spotify API connection
         
     Function: Spotify API GET request using track id list to get corresponding
     track names and artists
     
     Return: list of dictionaries where each entry contains track artist, track album, and track name
     '''
-
-    headers = {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'Authorization': f'Bearer ' + token,
-    }
-    
+  
     limit = 50
     num_queries = math.ceil(len(track_ids) / limit)
     tracks_aan = []
@@ -153,25 +147,29 @@ def get_track_artist_album(track_ids, token):
         else:
             id50_segment = track_ids[start:]
         
-        try:
-            id50_segment_query = ','.join(id50_segment)
-        except:
-            try:
-                for track_id in id50_segment:
-                    if track_id is None:
-                        id50_segment.remove(track_id)
-                id50_segment_query = ','.join(id50_segment)
-            except:
-                continue
+        #try:
+        #    id50_segment_query = ','.join(id50_segment)
+        #except:
+        #    try:
+        #        for track_id in id50_segment:
+        #            if track_id is None:
+        #                id50_segment.remove(track_id)
+        #        id50_segment_query = ','.join(id50_segment)
+        #    except:
+        #        continue
    
-        params_aan = [('ids', id50_segment_query)]
+        #params_aan = [('ids', id50_segment_query)]
+
+        for track_id in id50_segment:
+            if track_id is None:
+                id50_segment.remove(track_id)
 
         try:
-            response = requests.get('https://api.spotify.com/v1/tracks/', 
-                    headers = headers, params=params_aan, timeout = 5)
-            json = response.json()
+            #response = requests.get('https://api.spotify.com/v1/tracks/', 
+            #        headers = headers, params=params_aan, timeout = 5)
+            tracks = sp.tracks(id50_segment)
             index = 0
-            for track in json['tracks']:
+            for track in tracks['tracks']:
                 tracks_aan.append({'track_id': id50_segment[index], 
                                    'artist': track['album']['artists'][0]['name'], 
                                    'album': track['album']['name'], 
@@ -253,7 +251,7 @@ def get_deezer_album_genres(deezer_album_ids, genres_list, deezer_client_secret)
         except:
             continue
 
-def get_genres(track_ids, token, deezer_client_secret):
+def get_genres(track_ids, sp, deezer_client_secret):
     '''
     Parameters:
     - track_ids
@@ -268,7 +266,7 @@ def get_genres(track_ids, token, deezer_client_secret):
     be joined with master dataset.
     '''
     
-    track_info = get_track_artist_album(track_ids, token)
+    track_info = get_track_artist_album(track_ids, sp)
     album_ids = []
     genres_list = []
     get_deezer_album_id(track_info, album_ids, deezer_client_secret)
@@ -279,7 +277,7 @@ def get_genres(track_ids, token, deezer_client_secret):
         genres_df = genres_df.append(genre, ignore_index=True)
     return genres_df
 
-def get_audio_features(track_ids, token):
+def get_audio_features(track_ids, sp):
     '''
     Parameters:
         - track_ids: list of track ids to get audio features for
@@ -295,8 +293,6 @@ def get_audio_features(track_ids, token):
     --------+--------+--------+--------+--------+...
     1efae1j |   0.4  |    2   |   1.4  |  0.23  |...
     '''
-    
-    sp = spotipy.Spotify(auth=token)
     
     attempts = 0
     while attempts < 3:
@@ -462,7 +458,7 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
         print ('Error: CSV write failure')
         return False
 
-def store_user_track_data(username, token, deezer_client_secret):
+def store_user_track_data(sp, username, deezer_client_secret):
     '''
     Parameters:
         - token: client token needed to connect to Spotify API
@@ -484,7 +480,7 @@ def store_user_track_data(username, token, deezer_client_secret):
     1e3ae1j |   0.4  |    2   |   1.4  |  0.23  | alternative
     '''
 
-    user_track_ids = get_user_track_ids(token)
+    user_track_ids = get_user_track_ids(sp)
     
     # ----- REPLACE WITH SQL SELECT UNIQUE label FROM [tableName] LOGIC HERE -----
     
@@ -500,8 +496,8 @@ def store_user_track_data(username, token, deezer_client_secret):
     
     # ----- END ---------------------
     trackids_df = pd.DataFrame({'trackid': track_ids})
-    track_features = get_audio_features(track_ids, token)
-    track_genres = get_genres(track_ids, token, deezer_client_secret)
+    track_features = get_audio_features(track_ids, sp)
+    track_genres = get_genres(track_ids, sp, deezer_client_secret)
 
     track_data = pd.concat([trackids_df, track_features, track_genres], join='inner', axis=1)
     track_data.reset_index()
@@ -654,7 +650,7 @@ def binarize(df, feature_var, label_var, id_col):
 
         return {'data': binarized_data, feature_var: new_feature_var_values}
 
-def get_user_playlists(token):
+def get_user_playlists(sp):
     '''
     Parameters:
         - token: client token needed to connect to Spotify API
@@ -664,7 +660,6 @@ def get_user_playlists(token):
     
     Return: Dataframe with each entry containing a playlist name and playlist id.   
     '''
-    sp = spotipy.Spotify(auth=token)
     num_playlists = sp.current_user_playlists()['total']
     num_queries = math.ceil(num_playlists / 50)
     user_playlists = pd.DataFrame(columns=['name', 'id'])
@@ -676,7 +671,7 @@ def get_user_playlists(token):
     
     return user_playlists
 
-def create_user_playlists(df, token, username):
+def create_user_playlists(df, sp, username):
     '''
     Parameters:
         - df: dataframe containing track id's and predicted playlists they should be entered into
@@ -688,10 +683,9 @@ def create_user_playlists(df, token, username):
     
     Return: True if playlists were created successfully
     '''
-    sp = spotipy.Spotify(auth=token)
     
     try:
-        existing_pl_names = get_user_playlists(token)['name'].to_list()
+        existing_pl_names = get_user_playlists(sp)['name'].to_list()
         
         playlists_raw = list(set(df['playlist'].to_list()))
         playlists = []
@@ -712,9 +706,9 @@ def create_user_playlists(df, token, username):
             return False
     
     try:
-        user_playlists = get_user_playlists(token)
+        user_playlists = get_user_playlists(sp)
         generated_playlists = user_playlists[user_playlists['name'].isin(playlists)]
-        print(generated_playlists)
+        
     except:
         print('Error: Failed to retrieve newly added playlists')
         return False
