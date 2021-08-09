@@ -15,6 +15,8 @@ import os.path
 from os import path
 import yaml
 from collections import Counter
+from urllib.parse import urlencode
+
 
 from sklearn import preprocessing
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
@@ -44,7 +46,16 @@ search_and_label, store_data, store_user_track_data, get_data, get_user_track_da
 binarize, get_user_playlists, create_user_playlists)
 from dash_helpers import generate_table, generate_averages_plot, generate_pca_2d_plot, generate_sizes_graph, generate_top_genres
 
-'''===== API Access Management (Needs to be moved into a callback output) ====='''
+import flask
+from flask import (
+    Flask, 
+    render_template,  
+    make_response,
+    redirect,
+    request,
+    session,
+)
+
 tokenvars = yaml.load(open('apitokens.yaml'))
 
 # Credentials for Spotify API Client (using my Spotify Developer account)
@@ -56,16 +67,76 @@ spotipy_redirect_uri = 'https://example.com:8080'
 # Credentials for Deezer API (using my Deezer Developer account)
 deezer_client_id = tokenvars['deezer_client_id']
 deezer_client_secret = tokenvars['deezer_client_secret']
-'''===== API Access Management ====='''
 
+auth_url = 'https://accounts.spotify.com/authorize'
+token_url = 'https://accounts.spotify.com/api/token'
+redirect_uri = 'http://contextify.us-east-1.elasticbeanstalk.com/callback'
 
-'''===== Initialize App ====='''
+application = flask.Flask(__name__)
+application.secret_key = 'secret key'
+
+@application.route("/")
+def welcome():
+   return render_template("index.html")
+
+@application.route("/demo")
+def demo_session():
+    session['is_demo'] = True 
+    return redirect('/dashboard/')
+
+@application.route("/login")
+def home():
+    payload = {
+    'client_id': client_id,
+    'response_type': 'code',
+    'redirect_uri': redirect_uri,
+    'scope': scope,
+    'show_dialog': True,
+    }
+
+    res = make_response(redirect(f'{auth_url}/?{urlencode(payload)}'))
+
+    return res
+
+@application.route('/callback')
+def callback():
+    error = request.args.get('error')
+    code = request.args.get('code')
+    
+    payload = {
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': redirect_uri,
+    }
+
+    res = requests.post(token_url, auth=(client_id, client_secret), data=payload)
+    res_data = res.json()
+
+    if res_data.get('error') or res.status_code != 200:
+        app.logger.error(
+            'Failed to receive token: %s',
+            res_data.get('error', 'No error information received.'),
+        )
+        abort(res.status_code)
+
+    # Load tokens into session
+    session['tokens'] = {
+        'access_token': res_data.get('access_token'),
+        'refresh_token': res_data.get('refresh_token'),
+    }
+
+    session['is_demo'] = False 
+
+    return redirect('/dashboard/')
+
 external_stylesheets = ['https://stackpath.bootstrapcdn.com/bootswatch/4.5.2/lux/bootstrap.min.css']
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-application = app.server
-app.title = 'Contextify'
-'''===== Initialize App ====='''
 
+dash_app = dash.Dash(
+    __name__,
+    server=application,
+    routes_pathname_prefix='/dashboard/',
+    external_stylesheets=external_stylesheets
+)
 
 '''===== Load Global Variables ====='''
 colors = {
@@ -87,7 +158,7 @@ for playlist in playlists:
 stdscaler = StandardScaler()
 '''===== Load Global Variables ====='''
 
-app.layout = html.Div(children=[
+dash_app.layout = html.Div(children=[
     
     dbc.Jumbotron(
         [
@@ -113,12 +184,12 @@ app.layout = html.Div(children=[
     html.Div(
         [
             html.H3(
-                children='Step 1: Choose playlists to create',
+                children='Step 1: Choose AT LEAST TWO playlists to create',
                 style={'textAlign': 'center'}
             ),
             html.Div(
-                children='''We'll learn what types of tracks go in these playlists, 
-                    then apply our knowledge to your Spotify library.''',
+                children='''Our model learns what types of tracks go in these playlists, 
+                    then categorizes your Spotify library based on that understanding.''',
                 style={'textAlign': 'center'}
             )
         ]
@@ -246,13 +317,11 @@ app.layout = html.Div(children=[
     html.Div(
         html.Div(
             [
-                html.H3('Step 2: Enter your Spotify username', style={'textAlign': 'center'}),
+                html.H3('Step 2: Load Your Spotify Data', style={'textAlign': 'center'}),
                 html.Div('''We'll retrieve your 'Liked' songs and categorize them into the 
-                    playlists selected'''),
+                    playlists selected (Allow roughly 1 minute per 200 songs)'''),
                 html.Br(),
-                dbc.Input(id='spotify_username_input', type='text', placeholder='Spotify Username'),
-                html.Br(),
-                html.Br(),
+                #dbc.Input(id='spotify_username_input', type='text', placeholder='Spotify Username'),
                 dbc.Button(id='spotify_username_submit', color='primary', className="mr-1", children='Load Data'),
                 dcc.Loading(
                     id="user_loading",
@@ -407,14 +476,15 @@ app.layout = html.Div(children=[
                 dbc.Button(id='save_button', color='primary', className="mr-1", children='Save to Spotify'),
                 html.Br(),
                 html.Br(),
-                html.Br(),
                 dcc.Loading(
                     id='save_loading',
                     type='default',
                     children=html.Div(id='save_loading_output')
                 ),
+                html.Br(),
+                html.Br()
             ],
-            style={'display': 'none'},
+            style={'display': 'none', 'textAlign': 'center'},
             id='save_button_container'
         ),
         style={'width':'100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center'}
@@ -437,27 +507,30 @@ app.layout = html.Div(children=[
     html.Div(id='user_data_len', style={'display': 'none'}),
 ])
 
-@app.callback(Output('user_loading_output', 'children'),
+@dash_app.callback(Output('user_loading_output', 'children'),
               Output('user_data', 'children'),
               Output('user_data_binzd', 'children'),
               Output('user_genres_binzd', 'children'),
               Output('run_model_button_container', 'style'),
-              Input('spotify_username_submit', 'n_clicks'),
-              State('spotify_username_input', 'value'))
-def prep_user_data(n_clicks, username):
+              Input('spotify_username_submit', 'n_clicks'))
+def prep_user_data(n_clicks):
     '''Get Spotify username and download their track library data.
     Binarize cat. variables and write results as json to 'user_data' hidden div.'''
     if n_clicks:
-        sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                                                       client_id=client_id,
-                                                       client_secret=client_secret,
-                                                       redirect_uri='https://example.com:8080',
-                                                       scope=scope,
-                                                       username=username
-                                                       ))
+        if session.get('is_demo') == True:
+            username = '1242062883'
+            t0 = time.time()
+            success_status = '[Demo] Success'
         
-        t0 = time.time()
-        store_user_track_data(sp, username, deezer_client_secret)
+        else:
+            token = session.get('tokens').get('access_token')
+            sp = spotipy.Spotify(auth=token)
+            username = sp.current_user()['id']
+            
+            t0 = time.time()
+            store_user_track_data(username, token, deezer_client_secret)
+            success_status = 'Success'
+        
         user_tracks_df = get_user_track_data(username)['data']
 
         binarizer_user = binarize(df=user_tracks_df, feature_var='genre', label_var='None', id_col='trackid')
@@ -466,15 +539,15 @@ def prep_user_data(n_clicks, username):
         t1 = time.time()
 
         user_message = '''
-            Success: {} tracks retrieved from 'Liked' library for user {} in {:.2f} minutes.
-            '''.format(len(user_tracks_df.index), username, (t1-t0)/60)
+            {}: {} tracks retrieved from 'Liked' library for user {} in {:.2f} minutes.
+            '''.format(success_status, len(user_tracks_df.index), username, (t1-t0)/60)
 
         return user_message, user_tracks_df.to_json(), binarized_user_data.to_json(),\
                binarized_user_genres, {'display': 'block', 'textAlign': 'center'}
     else:
         return None, {}, {}, {}, {'display': 'none'}
 
-@app.callback(Output('user_data_predicted', 'children'),
+@dash_app.callback(Output('user_data_predicted', 'children'),
               Output('user_data_predicted_viz', 'children'),
               Output('user_data_predicted_std_features', 'children'),
               Output('run_model_loading_output', 'children'),
@@ -554,7 +627,7 @@ def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labe
     else:
         return {}, {}, {}, {}, {'display': 'none'}, {'display': 'none'}
 
-@app.callback(Output('model_data', 'children'),
+@dash_app.callback(Output('model_data', 'children'),
               Output('viz_data_w_id', 'children'),
               Output('viz_data', 'children'),
               Output('std_features', 'children'),
@@ -581,7 +654,7 @@ def prep_training_data(n_clicks, playlists):
     else: 
         return {}, {}, {}, {}, {}, {}, {'display': 'none'}
 
-@app.callback(Output('sizes_graph', 'figure'),
+@dash_app.callback(Output('sizes_graph', 'figure'),
               Output('sizes_graph_container', 'style'),
               Output('spotify_username_container', 'style'),
               Input('playlist_select_submit', 'n_clicks'),
@@ -595,7 +668,7 @@ def show_sizes_graph_training(n_clicks, viz_data_json, playlists):
     else:
         return {'data': []}, {'display': 'none'}, {'display': 'none'}
 
-@app.callback(Output('top_genres', 'children'),
+@dash_app.callback(Output('top_genres', 'children'),
               Output('top_genres_container', 'style'),
               Input('playlist_select_submit', 'n_clicks'),
               Input('viz_data', 'children'),
@@ -607,7 +680,7 @@ def show_top_genres(n_clicks, viz_data_json, playlists):
     else:
         return {}, {'display': 'none'}
 
-@app.callback(Output('pca_graph', 'figure'),
+@dash_app.callback(Output('pca_graph', 'figure'),
               Output('pca_graph_container', 'style'),
               Output('graph_loading_output', 'children'),
               Output('averages_graph', 'figure'),
@@ -629,7 +702,7 @@ def show_pca_graph_and_avg_graph_training(n_clicks, playlists, viz_data_json, st
     else:
         return {}, {'display': 'none'}, {}, {}, {'display': 'none'}
 
-@app.callback(Output('pca_graph_user', 'figure'),
+@dash_app.callback(Output('pca_graph_user', 'figure'),
               Output('pca_graph_user_container', 'style'),
               Output('averages_graph_user', 'figure'),
               Output('averages_graph_user_container', 'style'),
@@ -651,7 +724,7 @@ def show_pca_graph_and_avg_graph_user(n_clicks, playlists, user_viz_data_json, u
     else:
         return {}, {'display': 'none'}, {}, {'display': 'none'}, {'display': 'none'}
 
-@app.callback(Output('sizes_graph_user', 'figure'),
+@dash_app.callback(Output('sizes_graph_user', 'figure'),
               Output('sizes_graph_user_container', 'style'),
               Input('run_model_button', 'n_clicks'),
               Input('user_data_predicted_viz', 'children'))
@@ -662,7 +735,7 @@ def show_sizes_graph_user(n_clicks, user_viz_data_json):
     else:
         return {'data': []}, {'display': 'none'}
 
-@app.callback(Output('top_genres_user', 'children'),
+@dash_app.callback(Output('top_genres_user', 'children'),
               Output('top_genres_user_container', 'style'),
               Input('run_model_button', 'n_clicks'),
               Input('user_data_predicted_viz', 'children'),
@@ -675,30 +748,26 @@ def show_top_genres_user(n_clicks, user_viz_data_json, playlists):
     else:
         return {}, {'display': 'none'}
 
-@app.callback(Output('save_loading_output', 'children'),
+@dash_app.callback(Output('save_loading_output', 'children'),
               Input('save_button', 'n_clicks'),
-              State('spotify_username_input', 'value'),
               State('user_data_predicted', 'children'))
-def save_playlists_user(n_clicks, username, user_data_json):
+def save_playlists_user(n_clicks, user_data_json):
     if n_clicks:
-        sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                                                       client_id=client_id,
-                                                       client_secret=client_secret,
-                                                       redirect_uri='https://example.com:8080',
-                                                       scope=scope,
-                                                       username=username
-                                                       ))
+        token = session.get('tokens').get('access_token')
+        sp = spotipy.Spotify(auth=token)
+        username = sp.current_user()['id']
         
         user_data = pd.read_json(user_data_json)
         user_data = user_data[['trackid', 'label']]
         user_data.columns = ['trackid', 'playlist']
 
-        create_user_playlists(user_data, sp, username)
+        create_user_playlists(user_data, token, username)
+        user_message = 'Playlists created successfully!'
 
-        return {}
+        return user_message
     
     else:
         return {}
 
-if __name__ == '__main__':
-    application.run(debug=True, port=8080)
+if __name__== "__main__":
+     application.run(host='0.0.0.0', debug=True)

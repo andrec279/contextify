@@ -16,3 +16,4 @@ flask_sqlalchemy
 sqlalchemy
 jupyter
 pyyaml
+urllib3

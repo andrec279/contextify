@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Spotify Login{% endblock %}
+{% block header %}Welcome to Contextify.{% endblock %}
+{% block content %}
+<p>
+    This application uses Spotify's secure OAuth flow to read your Spotify library and create playlists on your behalf.
+    It requests that you log in through Spotify to enable connection via API to your Spotify library.
+</p>
+
+<a href="/login" class="btn btn-primary">Login with Spotify</a>
+
+<br><br>
+
+<p>
+    If you would rather not log in, a demo version is available to demonstrate how the application works on dummy data (sourced from my Spotify account).
+</p>
+
+<a href="/demo" class="btn btn-primary">Demo Version (Fake Data)</a>
+{% endblock %}
