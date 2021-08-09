@@ -416,8 +416,6 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
     '''
     t0 = time.time()
     
-    # ----- REPLACE WITH SQL SELECT UNIQUE label FROM [tableName] LOGIC HERE -----
-    
     if path.exists('trackdata.csv'):
         existing_data = pd.read_csv('trackdata.csv')
         stored_pls = list(set(existing_data['label'].to_list()))
@@ -425,11 +423,7 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
         if pl_name in stored_pls:
             print('{0} already exists in dataset'.format(pl_name))
             return True
-            
-    # For loop - filter out playlists from pl_names that are already in database
-    # If len(filtered_pl_names) > 0, proceed with function
-    
-    # ----- END ---------------------
+
     print('Starting data store for new label: {0}'.format(pl_name))
     track_labels = search_and_label(pl_name, num_pl_search, token)['track_labels']
     num_pls = search_and_label(pl_name, num_pl_search, token)['num_pls']
@@ -443,14 +437,11 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
     track_data = track_data.loc[:,~track_data.columns.duplicated()]
    
     try:
-        # ----- REPLACE WITH SQL INSERT INTO [tableName] LOGIC HERE -----
         
         if path.exists('trackdata.csv'):
             track_data.to_csv('trackdata.csv', mode='a', header=False, index=False)
         else:
             track_data.to_csv('trackdata.csv', mode='w', header=True, index=False)
-
-        # ----- END ---------------------
         
         t1 = time.time()
         print('Success: {0} unique tracks with features and labels obtained from {1} playlists in {2} seconds'.format( \
@@ -486,19 +477,13 @@ def store_user_track_data(username, token, deezer_client_secret):
 
     user_track_ids = get_user_track_ids(token)
     
-    # ----- REPLACE WITH SQL SELECT UNIQUE label FROM [tableName] LOGIC HERE -----
-    
     if path.exists(username + '_trackdata.csv'):
         existing_data = pd.read_csv(username + '_trackdata.csv')
         stored_tracks = list(set(existing_data['trackid'].to_list()))
         track_ids = [track for track in user_track_ids if track not in stored_tracks]
     else:
         track_ids = user_track_ids
-            
-    # For loop - filter out playlists from pl_names that are already in database
-    # If len(filtered_pl_names) > 0, proceed with function
-    
-    # ----- END ---------------------
+
     trackids_df = pd.DataFrame({'trackid': track_ids})
     track_features = get_audio_features(track_ids, token)
     track_genres = get_genres(track_ids, token, deezer_client_secret)
@@ -512,14 +497,11 @@ def store_user_track_data(username, token, deezer_client_secret):
         return True
    
     try:
-        # ----- REPLACE WITH SQL INSERT INTO [tableName] LOGIC HERE -----
         
         if path.exists(username + '_trackdata.csv'):
             track_data.to_csv(username + '_trackdata.csv', mode='a', header=False, index=False)
         else:
             track_data.to_csv(username + '_trackdata.csv', mode='w', header=True, index=False)
-
-        # ----- END ---------------------
 
         return True
     
@@ -545,11 +527,7 @@ def get_data(pl_names):
     
     t0 = time.time()
     
-    # --- REPLACE WITH SELECT * FROM [tableName] HERE ---
-    
     data = pd.read_csv('trackdata.csv')
-
-    # --- END ---
     
     filtered_data = data
 
@@ -592,12 +570,8 @@ def get_user_track_data(username):
     --------+--------+--------+--------+--------+--------
     1e3ae1j |   0.4  |    2   |   1.4  |  0.23  |  rock  
     '''
-       
-    # --- REPLACE WITH SELECT * FROM [tableName] HERE ---
     
     data = pd.read_csv(username + '_trackdata.csv')
-
-    # --- END ---
     
     features = [
             'danceability', 
