@@ -517,12 +517,7 @@ def prep_user_data(n_clicks):
     '''Get Spotify username and download their track library data.
     Binarize cat. variables and write results as json to 'user_data' hidden div.'''
     if n_clicks:
-        if session.get('is_demo') == True:
-            username = '1242062883'
-            t0 = time.time()
-            success_status = '[Demo] Success'
-        
-        else:
+        if session.get('is_demo') == False:
             token = session.get('tokens').get('access_token')
             sp = spotipy.Spotify(auth=token)
             username = sp.current_user()['id']
@@ -530,6 +525,12 @@ def prep_user_data(n_clicks):
             t0 = time.time()
             store_user_track_data(username, token, deezer_client_secret)
             success_status = 'Success'
+        
+        else:
+            print(session.get('is_demo'))
+            username = '1242062883'
+            t0 = time.time()
+            success_status = '[Demo] Success'
         
         user_tracks_df = get_user_track_data(username)['data']
 
