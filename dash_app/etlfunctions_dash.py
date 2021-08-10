@@ -610,9 +610,11 @@ def binarize(df, feature_var, label_var, id_col):
     1e3ae1j |   0.4  |    2   |   1.4  |  0.23  |     1      |     0       |       0       |        1       
     '''
 
+    # Generate column names for all categorical feature values (e.g. genres)
     feature_var_values = list(set(df[feature_var].to_list()))
     new_feature_var_values = [feature_var + '_' + value for value in feature_var_values]
 
+    # Pivot label and categorical feature columns into binary columns for each value
     if label_var != 'None':
         label_var_values = list(set(df[label_var].to_list()))
         new_label_var_values = [label_var + '_' + value for value in label_var_values]

@@ -562,9 +562,10 @@ def prep_user_data(n_clicks):
               Input('user_data_binzd', 'children'),
               Input('user_genres_binzd', 'children'),
               Input('user_data', 'children'),
-              Input('threshold_slider', 'value'))
+              Input('threshold_slider', 'value'),
+              State('playlist_select_dropdown', 'value'))
 def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labels_binzd, model_genres_binzd,
-                        binarized_user_data_json, user_genres_binzd, user_data_json, threshold_slider):
+                        binarized_user_data_json, user_genres_binzd, user_data_json, threshold_slider, playlists):
     if n_clicks:
         model_data = pd.read_json(model_data_json)
         user_data_binzd = pd.read_json(binarized_user_data_json)
@@ -603,6 +604,7 @@ def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labe
         multilogreg = OneVsRestClassifier(LogisticRegression(max_iter=500), n_jobs=-1)
         multilogreg.fit(X, y)
 
+        # Model application to user data
         user_data_probas = pd.DataFrame(multilogreg.predict_proba(std_user_data))
         pl_pred_raw = user_data_probas.applymap(lambda x: 1 if x > threshold_slider else 0)
         pl_pred_raw.columns = model_labels_binzd
@@ -610,6 +612,7 @@ def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labe
         pl_model_output = pd.concat([user_track_ids_col, pl_pred_raw], join='inner', axis=1)
         pl_predictions = pd.DataFrame(columns=['trackid', 'label'])
 
+        # Pivot predicted binary label columns back into a single categorical column
         for pl in model_labels_binzd:
             pl_category = pl_model_output[pl_model_output[pl]==1]
             for index, row in pl_category.iterrows():
@@ -617,13 +620,13 @@ def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labe
                                                         'label': pl.replace('label_', '')},
                                                         ignore_index=True)
 
-        print('pl_predictions:', pl_predictions.groupby('label').count())
-
+        # Filter categorized user data only to songs that belong in the playlists selected by the user
         user_data_predicted = user_data[['trackid']+features+['genre']].merge(pl_predictions, how='inner', on='trackid')
-        user_data_predicted_viz = user_data_predicted.drop('trackid', axis=1).reset_index(drop=True)
+        user_data_predicted_final = user_data_predicted[user_data_predicted['label'].isin(playlists)].reset_index(drop=True)
+        user_data_predicted_viz = user_data_predicted_final.drop('trackid', axis=1).reset_index(drop=True)
         user_data_std_features = pd.DataFrame(stdscaler.fit_transform(user_data_predicted[features]), columns=features)
 
-        return user_data_predicted.to_json(), user_data_predicted_viz.to_json(), user_data_std_features.to_json(), {}, {'display': 'block'},\
+        return user_data_predicted_final.to_json(), user_data_predicted_viz.to_json(), user_data_std_features.to_json(), {}, {'display': 'block'},\
                {'display': 'block', 'text-align': 'center', 'align-items': 'center', 'justify-content': 'center', 'width': '60%'}
     else:
         return {}, {}, {}, {}, {'display': 'none'}, {'display': 'none'}
@@ -641,9 +644,9 @@ def prep_training_data(n_clicks, playlists):
     if n_clicks:
         viz_data_w_id = data_wtrackid[data_wtrackid['label'].isin(playlists)].reset_index(drop=True)
         viz_data = data[data['label'].isin(playlists)].reset_index(drop=True)
-        std_features = pd.DataFrame(stdscaler.fit_transform(viz_data[features]), columns=features)
+        std_features = pd.DataFrame(stdscaler.fit_transform(data[features]), columns=features)
 
-        binarizer = binarize(df=viz_data_w_id, feature_var='genre', label_var='label', id_col='trackid')
+        binarizer = binarize(df=data_wtrackid, feature_var='genre', label_var='label', id_col='trackid')
         model_data = binarizer['data'].reset_index(drop=True)
         model_labels_binzd = binarizer['label']
         model_genres_binzd = binarizer['genre']
