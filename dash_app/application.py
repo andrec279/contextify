@@ -184,7 +184,7 @@ dash_app.layout = html.Div(children=[
     html.Div(
         [
             html.H3(
-                children='Step 1: Choose AT LEAST TWO playlists to create',
+                children='Step 1: Choose playlists to create',
                 style={'textAlign': 'center'}
             ),
             html.Div(
