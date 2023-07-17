@@ -276,7 +276,7 @@ def get_genres(track_ids, token, deezer_client_secret):
     
     genres_df = pd.DataFrame(columns=['trackid', 'genre'])
     for genre in genres_list:
-        genres_df = genres_df.append(genre, ignore_index=True)
+        genres_df = pd.concat([genres_df, pd.DataFrame([genre])], ignore_index=True)
     return genres_df
 
 def get_audio_features(track_ids, token):
@@ -341,7 +341,7 @@ def get_audio_features(track_ids, token):
                         continue
                     
                     try:
-                        features_df = features_df.append(audio_features, ignore_index=True)
+                        features_df = pd.concat([features_df, pd.DataFrame([audio_features])], ignore_index=True)
                     except:
                         print(id_index)
                         
@@ -355,6 +355,43 @@ def get_audio_features(track_ids, token):
     
     print('Unable to get features for playlist')
     return False
+
+
+def get_track_name_artist(track_ids, token):
+    sp = spotipy.Spotify(auth=token)
+    attempts = 0
+    max_batch_size = 50
+    while attempts < 3:
+        try:
+            num_iter = math.ceil(len(track_ids)/max_batch_size)
+            track_names, track_artists = [], []
+            for i in range(num_iter):
+                start = i * max_batch_size
+                end = start + max_batch_size
+                
+                if len(track_ids[start:]) >= max_batch_size:
+                    segment = track_ids[start:end]
+                else:
+                    segment = track_ids[start:]
+                try:
+                    tracks = sp.tracks(segment)['tracks']
+                    for track in tracks:
+                        track_names.append(track['name'])
+                        track_artists.append([artist['name'] for artist in track['album']['artists']])
+                except:
+                    track_names.append(['Not Found']*len(segment))
+                    track_artists.append(['Not Found']*len(segment))
+                    continue 
+            
+            track_info_df = pd.DataFrame({'trackid': track_ids, 'track_name': track_names, 'track_artists': track_artists})
+            return track_info_df
+
+        except:
+            attempts += 1
+    
+    print('Unable to get track names / artists')
+    return False
+
 
 def search_and_label(pl_name, num_pl_search, token):
     '''
@@ -387,7 +424,7 @@ def search_and_label(pl_name, num_pl_search, token):
     for track_id in queried_track_ids:
         try:
             search_result = {'trackid': track_id, 'label': pl_name}
-            song_labels = song_labels.append(search_result, ignore_index=True)
+            song_labels = pd.concat([song_labels, pd.DataFrame([search_result])], ignore_index=True)
         except:
             continue
 
@@ -453,7 +490,7 @@ def store_data(pl_name, num_pl_search, token, deezer_client_secret):
         print ('Error: CSV write failure')
         return False
 
-def store_user_track_data(username, token, deezer_client_secret):
+def store_user_track_data(username, token, deezer_client_secret=None):
     '''
     Parameters:
         - token: client token needed to connect to Spotify API
@@ -484,11 +521,13 @@ def store_user_track_data(username, token, deezer_client_secret):
     else:
         track_ids = user_track_ids
 
-    trackids_df = pd.DataFrame({'trackid': track_ids})
+    # trackids_df = pd.DataFrame({'trackid': track_ids})
+    track_info = get_track_name_artist(track_ids, token)
     track_features = get_audio_features(track_ids, token)
-    track_genres = get_genres(track_ids, token, deezer_client_secret)
+   
+    #track_genres = get_genres(track_ids, token, deezer_client_secret)
 
-    track_data = pd.concat([trackids_df, track_features, track_genres], join='inner', axis=1)
+    track_data = pd.merge(track_info, track_features, how='inner', on='trackid')
     track_data.reset_index()
     track_data = track_data.loc[:,~track_data.columns.duplicated()]
     
@@ -648,7 +687,7 @@ def get_user_playlists(token):
     for i in range(num_queries):
         results = sp.current_user_playlists(limit=50)
         for item in results['items']:
-           user_playlists = user_playlists.append({'name': item['name'], 'id': item['id']}, ignore_index=True)
+           user_playlists = pd.concat([user_playlists,pd.DataFrame([{'name': item['name'], 'id': item['id']}])], ignore_index=True)
     
     return user_playlists
 

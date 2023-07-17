@@ -4,11 +4,11 @@ pandas
 matplotlib
 seaborn
 numpy
-sklearn
+scikit-learn
 imblearn
 flask
 dash
-dash_bootstrap_components
+dash_bootstrap_components==0.13.1
 dash_core_components
 dash_html_components
 chart_studio
@@ -16,3 +16,7 @@ flask_sqlalchemy
 sqlalchemy
 jupyter
 pyyaml
+langchain==0.0.235
+wikipedia==1.4.0
+google-search-results==2.4.2
+openai==0.27.8

@@ -56,7 +56,7 @@ from flask import (
     session,
 )
 
-tokenvars = yaml.load(open('apitokens.yaml'))
+tokenvars = yaml.load(open('apitokens.yaml'), Loader=yaml.Loader)
 
 # Credentials for Spotify API Client (using my Spotify Developer account)
 client_id = tokenvars['spotify_client_id']
@@ -70,7 +70,8 @@ deezer_client_secret = tokenvars['deezer_client_secret']
 
 auth_url = 'https://accounts.spotify.com/authorize'
 token_url = 'https://accounts.spotify.com/api/token'
-redirect_uri = 'http://contextify.us-east-1.elasticbeanstalk.com/callback'
+redirect_uri = 'http://127.0.0.1:5000/callback'
+#redirect_uri = 'http://contextify.us-east-1.elasticbeanstalk.com/callback' # FOR PRODUCTION
 
 application = flask.Flask(__name__)
 application.secret_key = 'secret key'
@@ -509,8 +510,8 @@ dash_app.layout = html.Div(children=[
 
 @dash_app.callback(Output('user_loading_output', 'children'),
               Output('user_data', 'children'),
-              Output('user_data_binzd', 'children'),
-              Output('user_genres_binzd', 'children'),
+              #Output('user_data_binzd', 'children'),
+              #Output('user_genres_binzd', 'children'),
               Output('run_model_button_container', 'style'),
               Input('spotify_username_submit', 'n_clicks'))
 def prep_user_data(n_clicks):
@@ -523,7 +524,7 @@ def prep_user_data(n_clicks):
             username = sp.current_user()['id']
             
             t0 = time.time()
-            store_user_track_data(username, token, deezer_client_secret)
+            store_user_track_data(username, token)
             success_status = 'Success'
         
         else:
@@ -534,43 +535,42 @@ def prep_user_data(n_clicks):
         
         user_tracks_df = get_user_track_data(username)['data']
 
-        binarizer_user = binarize(df=user_tracks_df, feature_var='genre', label_var='None', id_col='trackid')
-        binarized_user_data = binarizer_user['data']
-        binarized_user_genres = binarizer_user['genre']
+        # binarizer_user = binarize(df=user_tracks_df, feature_var='genre', label_var='None', id_col='trackid')
+        # binarized_user_data = binarizer_user['data']
+        # binarized_user_genres = binarizer_user['genre']
         t1 = time.time()
 
         user_message = '''
             {}: {} tracks retrieved from 'Liked' library for user {} in {:.2f} minutes.
             '''.format(success_status, len(user_tracks_df.index), username, (t1-t0)/60)
 
-        return user_message, user_tracks_df.to_json(), binarized_user_data.to_json(),\
-               binarized_user_genres, {'display': 'block', 'textAlign': 'center'}
+        return user_message, user_tracks_df.to_json(), {'display': 'block', 'textAlign': 'center'}
     else:
         return None, {}, {}, {}, {'display': 'none'}
 
 @dash_app.callback(Output('user_data_predicted', 'children'),
-              Output('user_data_predicted_viz', 'children'),
-              Output('user_data_predicted_std_features', 'children'),
-              Output('run_model_loading_output', 'children'),
-              Output('user_data_dashboard_header', 'style'),
-              Output('threshold_slider_container', 'style'),
-              Input('run_model_button', 'n_clicks'),
-              Input('model_data', 'children'),
-              Input('std_features', 'children'),
-              Input('model_labels_binzd', 'children'),
-              Input('model_genres_binzd', 'children'),
-              Input('user_data_binzd', 'children'),
-              Input('user_genres_binzd', 'children'),
-              Input('user_data', 'children'),
-              Input('threshold_slider', 'value'),
-              State('playlist_select_dropdown', 'value'))
+                Output('user_data_predicted_viz', 'children'),
+                Output('user_data_predicted_std_features', 'children'),
+                Output('run_model_loading_output', 'children'),
+                Output('user_data_dashboard_header', 'style'),
+                Output('threshold_slider_container', 'style'),
+                Input('run_model_button', 'n_clicks'),
+                #Input('model_data', 'children'),
+                #Input('std_features', 'children'),
+                #Input('model_labels_binzd', 'children'),
+                #Input('model_genres_binzd', 'children'),
+                #Input('user_data_binzd', 'children'),
+                #Input('user_genres_binzd', 'children'),
+                Input('user_data', 'children'),
+                Input('threshold_slider', 'value'),
+                State('playlist_select_dropdown', 'value'))
 def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labels_binzd, model_genres_binzd,
                         binarized_user_data_json, user_genres_binzd, user_data_json, threshold_slider, playlists):
     if n_clicks:
-        model_data = pd.read_json(model_data_json)
-        user_data_binzd = pd.read_json(binarized_user_data_json)
+        #model_data = pd.read_json(model_data_json)
+        #user_data_binzd = pd.read_json(binarized_user_data_json)
         user_data = pd.read_json(user_data_json)
-        std_features = pd.read_json(std_features_json)
+        #std_features = pd.read_json(std_features_json)
 
         print('model labels:', model_labels_binzd)
 
@@ -616,8 +616,8 @@ def predict_user_labels(n_clicks, model_data_json, std_features_json, model_labe
         for pl in model_labels_binzd:
             pl_category = pl_model_output[pl_model_output[pl]==1]
             for index, row in pl_category.iterrows():
-                pl_predictions = pl_predictions.append({'trackid': row['trackid'], 
-                                                        'label': pl.replace('label_', '')},
+                pl_predictions = pd.concat([pl_predictions, pd.DataFrame([{'trackid': row['trackid'], 
+                                                        'label': pl.replace('label_', '')}])],
                                                         ignore_index=True)
 
         # Filter categorized user data only to songs that belong in the playlists selected by the user
